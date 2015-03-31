@@ -2,7 +2,12 @@ import sys, os
 import urllib2
 import cStringIO
 import json
-from PIL import Image
+try:
+    from PIL import Image
+except ImportError:
+    print "PIL module not found, install using 'sudo pip install PIL'"
+    print "If that fails, try 'sudo pip install PIL --allow-external PIL --allow-unverified PIL'"
+    sys.exit(1)
 
 
 def getProminentColor(searchTerm):
