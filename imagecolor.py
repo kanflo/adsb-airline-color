@@ -2,6 +2,7 @@ import sys, os
 import urllib2
 import cStringIO
 import json
+import socket
 try:
     from PIL import Image
 except ImportError:
