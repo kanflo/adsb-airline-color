@@ -47,6 +47,12 @@ def mqttOnMessage(mosq, obj, msg):
     global gCurrentColor
     try:
         data = json.loads(msg.payload)
+    except Exception as e:
+        log.error("JSON load failed for '%s' : %s" % (msg.payload, e))
+        print traceback.format_exc()
+        return
+
+    if data["operator"] and data["distance"]:
         airline = data["operator"]
         distance = data["distance"]
         lost = False
@@ -60,7 +66,12 @@ def mqttOnMessage(mosq, obj, msg):
             log.debug("Lost sight of aircraft")
             color = (0, 0, 0)
         else:
-            color = imagecolor.getColor(airline)
+            try:
+                color = imagecolor.getColor(airline)
+            except Exception as e:
+                log.error("getColor failed for '%s' : %s" % (msg.payload, e))
+                print traceback.format_exc()
+                return
     #    print airline
     #    if distance > gMaxDistance:
     #      color[0] = color[1] = color[2] = 0
@@ -70,15 +81,10 @@ def mqttOnMessage(mosq, obj, msg):
     #    color[0] = color[0] * 
         if color != gCurrentColor:
             log.debug("New color is %02x%02x%02x" % (color[0], color[1], color[2]))
-            cmd = "mosquitto_pub -h %s -t ghost/led -m \"LED:%02x%02x%02x\"" % (gMQTTBroker, color[0], color[1], color[2])
+            cmd = "mosquitto_pub -h %s -t ghost/led -m \"#%02x%02x%02x\"" % (gMQTTBroker, color[0], color[1], color[2])
             os.system(cmd)
             gCurrentColor = color
 
-
-#    print data
-    except Exception as e:
-        log.error("JSON load failed for '%s' : %s" % (msg.payload, e))
-        print traceback.format_exc()
 
 
 def mqttOnPublish(mosq, obj, mid):
@@ -104,9 +110,9 @@ def mqttThread():
     except Exception as e:
         log.error("MQTT thread got exception: %s" % (e))
         print traceback.format_exc()
-        gQuitting = True
-        log.info("MQTT disconnect")
-        mqttc.disconnect();
+#        gQuitting = True
+#        log.info("MQTT disconnect")
+#        mqttc.disconnect();
 
 def mqttConnect():
     global mqttc

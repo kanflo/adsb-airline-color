@@ -36,7 +36,19 @@ def getProminentColor(searchTerm):
                 break
 
     print imageUrl
-    file = cStringIO.StringIO(urllib2.urlopen(imageUrl).read())
+    opener = urllib2.build_opener()
+    opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+    counter = 3
+    while counter > 0:
+        try:
+            file = cStringIO.StringIO(opener.open(imageUrl).read())
+        except socket.timeout, e:
+            # For Python 2.7
+            print "Timeout, retrying"
+            pass
+        counter -= 1
+
+#    file = cStringIO.StringIO(urllib2.urlopen(imageUrl).read())
     im = Image.open(file)
 
     histogram = {}
