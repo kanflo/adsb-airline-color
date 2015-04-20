@@ -20,7 +20,7 @@ import random
 
 gQuitting = False
 gCurrentColor = ()
-gMaxDistance = 5000.0
+gMaxDistance = 25.0 # km
 
 gMQTTBroker = "172.16.3.104"
 #gMQTTBroker = "gateway.local"
@@ -35,12 +35,12 @@ def mqttOnConnect(mosq, obj, rc):
 
 def mqttOnDisconnect(mosq, obj, rc):
     global gQuitting
-    log.debug("MQTT Disconnect: %s" % (str(rc)))
+    log.info("MQTT Disconnect: %s" % (str(rc)))
     if not gQuitting:
         while not mqttConnect():
             time.sleep(10)
-            log.debug("Attempting MQTT reconnect")
-    log.debug("MQTT connected")
+            log.info("Attempting MQTT reconnect")
+    log.info("MQTT connected")
 
 def mqttOnMessage(mosq, obj, msg):
     global gMaxDistance
@@ -72,13 +72,13 @@ def mqttOnMessage(mosq, obj, msg):
                 log.error("getColor failed for '%s' : %s" % (msg.payload, e))
                 print traceback.format_exc()
                 return
-    #    print airline
-    #    if distance > gMaxDistance:
-    #      color[0] = color[1] = color[2] = 0
-    #    else:
-    #      color[0] = color[0] = 
-    #
-    #    color[0] = color[0] * 
+        if distance > gMaxDistance:
+          color = (0, 0, 0)
+        else:
+          color_0 = int(color[0] * (1 - (distance / gMaxDistance)))
+          color_1 = int(color[1] * (1 - (distance / gMaxDistance)))
+          color_2 = int(color[2] * (1 - (distance / gMaxDistance)))
+          color = (color_0, color_1, color_2)
         if color != gCurrentColor:
             log.debug("New color is %02x%02x%02x" % (color[0], color[1], color[2]))
             cmd = "mosquitto_pub -h %s -t ghost/led -m \"#%02x%02x%02x\"" % (gMQTTBroker, color[0], color[1], color[2])
