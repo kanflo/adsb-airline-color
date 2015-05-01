@@ -20,7 +20,7 @@ import random
 
 gQuitting = False
 gCurrentColor = ()
-gMaxDistance = 25.0 # km
+gMaxDistance = 10.0 # km
 
 gMQTTBroker = "172.16.3.104"
 #gMQTTBroker = "gateway.local"
