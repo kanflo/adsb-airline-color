@@ -59,16 +59,19 @@ def getProminentColor(searchTerm):
     if isinstance(px, (int, long)):
         im = im.convert() # Conver to multi-layer image
 
-    for i in range(im.size[0]):
-        for j in range(im.size[1]):
-            px = im.getpixel((i,j))
-#            print px
-            if px != (0, 0, 0) and px != (0, 0, 0, 0) and px != (255, 255, 255):
-                if abs(px[0]-px[1]) > limit or abs(px[0]-px[2]) > limit or abs(px[1]-px[2]) > limit:
-                    if not px in histogram:
-                        histogram[px] = 1
-                    else:
-                        histogram[px] = histogram[px] + 1
+    try:
+        for i in range(im.size[0]):
+            for j in range(im.size[1]):
+                px = im.getpixel((i,j))
+    #            print px
+                if px != (0, 0, 0) and px != (0, 0, 0, 0) and px != (255, 255, 255):
+                    if abs(px[0]-px[1]) > limit or abs(px[0]-px[2]) > limit or abs(px[1]-px[2]) > limit:
+                        if not px in histogram:
+                            histogram[px] = 1
+                        else:
+                            histogram[px] = histogram[px] + 1
+    except AttributeError, e:
+        pass # Grayscale image?
 
     px_max = (0, 0, 0)
     max_count = 0
