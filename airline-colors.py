@@ -26,6 +26,8 @@ gMQTTBroker = "172.16.3.104"
 #gMQTTBroker = "gateway.local"
 gMQTTPort = "1883"
 
+gConnectCount = 0
+
 log = logging.getLogger(__name__)
 
 
@@ -35,7 +37,13 @@ def mqttOnConnect(mosq, obj, rc):
 
 def mqttOnDisconnect(mosq, obj, rc):
     global gQuitting
+    global gConnectCount
     log.info("MQTT Disconnect: %s" % (str(rc)))
+    gConnectCount += 1
+    if gConnectCount == 10:
+        log.info("Giving up!")
+        gQuitting = True
+        sys.exit()
     if not gQuitting:
         while not mqttConnect():
             time.sleep(10)
@@ -102,6 +110,7 @@ def mqttOnLog(mosq, obj, level, string):
 
 def mqttThread():
     global gQuitting
+    log.info("MQTT thread started")
     try:
         mqttc.loop_forever()
         gQuitting = True
@@ -113,6 +122,7 @@ def mqttThread():
 #        gQuitting = True
 #        log.info("MQTT disconnect")
 #        mqttc.disconnect();
+    log.info("MQTT thread exited")
 
 def mqttConnect():
     global mqttc
