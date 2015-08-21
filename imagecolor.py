@@ -3,6 +3,10 @@ import urllib2
 import cStringIO
 import json
 import socket
+import logging
+
+log = logging.getLogger(__name__)
+
 try:
     from PIL import Image
 except ImportError:
@@ -26,9 +30,17 @@ def getProminentColor(searchTerm):
         fetcher = urllib2.build_opener()
         searchTerm = "%s+logo" % (searchTerm)
         startIndex = 0
+        log.debug("Googeling '%s'" % searchTerm)
         searchUrl = "http://ajax.googleapis.com/ajax/services/search/images?v=1.0&q=" + searchTerm + "&start=%d" % (startIndex)
-        f = fetcher.open(searchUrl)
+        try:
+            f = fetcher.open(searchUrl, timeout = 10)
+        except UnicodeEncodeError, e:
+            log.error("Google UnicodeEncode error: %s" % (e))
+            log.error("searchTerm : '%s'" % (searchTerm))
+            return None
+
         data = f.read()
+        log.debug("  Done")
         j = json.loads(data)
         for i in range(0, len(j['responseData']['results'])):
             imageUrl = j['responseData']['results'][i]['unescapedUrl']
@@ -36,21 +48,41 @@ def getProminentColor(searchTerm):
             if fileExtension != ".svg" and fileExtension != ".gif":
                 break
 
-    print imageUrl
+    log.debug("Fetching %s" % imageUrl)
     opener = urllib2.build_opener()
     opener.addheaders = [('User-agent', 'Mozilla/5.0')]
     counter = 3
     while counter > 0:
         try:
-            file = cStringIO.StringIO(opener.open(imageUrl).read())
+            file = cStringIO.StringIO(opener.open(imageUrl, timeout = 10).read())
+            log.debug("  ok")
+            break
         except socket.timeout, e:
             # For Python 2.7
-            print "Timeout, retrying"
+            log.debug("  Timeout, retrying")
+            counter -= 1
             pass
-        counter -= 1
+        except urllib2.HTTPError, e:
+            log.error("HTTP error: %s" % (e))
+            log.error("searchTerm : '%s'" % (searchTerm))
+            return None
+        except UnicodeEncodeError, e:
+            log.error("UnicodeEncodeError error: %s" % (e))
+            log.error("searchTerm : '%s'" % (searchTerm))
+            return None
+        except urllib2.URLError, e:
+            log.error("URLError error: %s" % (e))
+            log.error("searchTerm : '%s'" % (searchTerm))
+            return None
 
+    log.debug("  Done")
 #    file = cStringIO.StringIO(urllib2.urlopen(imageUrl).read())
-    im = Image.open(file)
+    try:
+        im = Image.open(file)
+    except UnicodeEncodeError, e:
+        log.error("URLError error: %s" % (e))
+        log.error("searchTerm : '%s'" % (searchTerm))
+        return None
 
     histogram = {}
     limit = 10
