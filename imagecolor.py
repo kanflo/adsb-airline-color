@@ -124,6 +124,7 @@ def loadColorData():
 
 def getColor(key):
     global colors
+    key = key.encode('utf-8', 'ignore')
     if key in colors:
         color = colors[key]["color"]
     else:
