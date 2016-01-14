@@ -120,7 +120,8 @@ def mqttOnMessage(mosq, obj, msg):
             color = (color_0, color_1, color_2)
         if color != gCurrentColor:
             log.debug("New color is %02x%02x%02x" % (color[0], color[1], color[2]))
-            cmd = "mosquitto_pub -h %s -t ghost/led -m \"#%02x%02x%02x\"" % (options.mqtt_host, color[0], color[1], color[2])
+            # This is a bit lazy, I know...
+            cmd = "mosquitto_pub -h %s -t %s -m \"#%02x%02x%02x\"" % (options.mqtt_host, options.mqtt_topic, color[0], color[1], color[2])
             os.system(cmd)
             gCurrentColor = color
 
@@ -227,6 +228,7 @@ def main():
     parser = OptionParser()
     parser.add_option('-m', '--mqtt-host', dest='mqtt_host', help="MQTT broker hostname", default='127.0.0.1')
     parser.add_option('-p', '--mqtt-port', dest='mqtt_port', type="int", help="MQTT broker port number", default=1883)
+    parser.add_option('-t', '--mqtt-topic', dest='mqtt_topic', help="MQTT color topic", default="airlinecolor")
     parser.add_option('-d', '--max-distance', dest='max_distance', type="float", help="Max distance to light the LED (km)", default=10.0)
     parser.add_option('-v', '--verbose', dest='verbose',  action="store_true", help="Verbose output")
 
