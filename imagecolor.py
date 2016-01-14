@@ -25,6 +25,7 @@ import cStringIO
 import json
 import socket
 import logging
+import bing
 
 log = logging.getLogger(__name__)
 
@@ -36,74 +37,48 @@ except ImportError:
     sys.exit(1)
 
 
-def getProminentColor(searchTerm):
-    if 0:
-        imageUrl = "http://upload.wikimedia.org/wikipedia/commons/thumb/a/a0/Wizz_Air_logo.svg/2000px-Wizz_Air_logo.svg.png"
-    #   imageUrl = "http://upload.wikimedia.org/wikipedia/en/thumb/9/9f/United_Parcel_Service_logo.svg/857px-United_Parcel_Service_logo.svg.png"
-    #   imageUrl = "http://upload.wikimedia.org/wikipedia/de/thumb/d/d6/Thomas_Cook_Airlines_Logo.png/150px-Thomas_Cook_Airlines_Logo.png"
-    #   imageUrl = "http://upload.wikimedia.org/wikipedia/commons/d/d4/Logo_Air_Berlin_mit_Claim.jpg"
-    #   imageUrl = "http://commons.wikimedia.org/wiki/File:Tuifly_logo.svg"
-    #   imageUrl = "http://upload.wikimedia.org/wikipedia/commons/thumb/3/33/Scandinavian_Airlines_logo.svg/2000px-Scandinavian_Airlines_logo.svg.png"
+def getImage(searchTerm):
+    searchTerm = "%s+logo" % (searchTerm)
+    log.debug("Searching for %s" % searchTerm)
 
-    else:
-        searchTerm = searchTerm.replace(" ", "+")
-
-        fetcher = urllib2.build_opener()
-        searchTerm = "%s+logo" % (searchTerm)
-        startIndex = 0
-        log.debug("Googeling '%s'" % searchTerm)
-        searchUrl = "http://ajax.googleapis.com/ajax/services/search/images?v=1.0&q=" + searchTerm + "&start=%d" % (startIndex)
-        try:
-            f = fetcher.open(searchUrl, timeout = 10)
-        except UnicodeEncodeError, e:
-            log.error("Google UnicodeEncode error: %s" % (e))
-            log.error("searchTerm : '%s'" % (searchTerm))
-            return None
-
-        data = f.read()
-        log.debug("  Done")
-        j = json.loads(data)
-        for i in range(0, len(j['responseData']['results'])):
-            imageUrl = j['responseData']['results'][i]['unescapedUrl']
-            fileName, fileExtension = os.path.splitext(imageUrl)
-            if fileExtension != ".svg" and fileExtension != ".gif":
-                break
-
-    log.debug("Fetching %s" % imageUrl)
-    opener = urllib2.build_opener()
-    opener.addheaders = [('User-agent', 'Mozilla/5.0')]
-    counter = 3
-    while counter > 0:
-        try:
-            file = cStringIO.StringIO(opener.open(imageUrl, timeout = 10).read())
-            log.debug("  ok")
-            break
-        except socket.timeout, e:
-            # For Python 2.7
-            log.debug("  Timeout, retrying")
-            counter -= 1
-            pass
-        except urllib2.HTTPError, e:
-            log.error("HTTP error: %s" % (e))
-            log.error("searchTerm : '%s'" % (searchTerm))
-            return None
-        except UnicodeEncodeError, e:
-            log.error("UnicodeEncodeError error: %s" % (e))
-            log.error("searchTerm : '%s'" % (searchTerm))
-            return None
-        except urllib2.URLError, e:
-            log.error("URLError error: %s" % (e))
-            log.error("searchTerm : '%s'" % (searchTerm))
-            return None
-
-    log.debug("  Done")
-#    file = cStringIO.StringIO(urllib2.urlopen(imageUrl).read())
     try:
-        im = Image.open(file)
-    except UnicodeEncodeError, e:
-        log.error("URLError error: %s" % (e))
-        log.error("searchTerm : '%s'" % (searchTerm))
+        imageUrls = bing.imageSearch(searchTerm, {"minWidth":400, "minHeight":400})
+    except Exception, e:
+        log.error("Bing exception error: %s" % (e))
         return None
+
+    for url in imageUrls:
+        log.debug(" Checking %s" % url)
+        fileName, fileExtension = os.path.splitext(url)
+        if fileExtension != ".svg" and fileExtension != ".gif":
+
+            log.debug("Fetching %s" % url)
+            opener = urllib2.build_opener()
+            opener.addheaders = [('User-agent', 'Mozilla/5.0')]
+            try:
+                file = cStringIO.StringIO(opener.open(url, timeout = 10).read())
+                im = Image.open(file)
+                return (im, url)
+            except urllib2.HTTPError, e:
+                log.error("HTTP error: %s for %s" % (e, url))
+                log.error("searchTerm : '%s'" % (searchTerm))
+                pass
+            except UnicodeEncodeError, e:
+                log.error("UnicodeEncodeError error: %s" % (e))
+                log.error("searchTerm : '%s'" % (searchTerm))
+                pass
+            except urllib2.URLError, e:
+                log.error("URLError error: %s for %s" % (e, url))
+                log.error("searchTerm : '%s'" % (searchTerm))
+                pass
+
+    return (None, None)
+
+def getProminentColor(searchTerm):
+    (im, url) = getImage(searchTerm)
+    if im == None:
+        # In case we cannot find a color, make sure we don't end up here in 10 milliseconds
+        return ((0,0,0), "error")
 
     histogram = {}
     limit = 10
@@ -116,7 +91,6 @@ def getProminentColor(searchTerm):
         for i in range(im.size[0]):
             for j in range(im.size[1]):
                 px = im.getpixel((i,j))
-    #            print px
                 if px != (0, 0, 0) and px != (0, 0, 0, 0) and px != (255, 255, 255):
                     if abs(px[0]-px[1]) > limit or abs(px[0]-px[2]) > limit or abs(px[1]-px[2]) > limit:
                         if not px in histogram:
@@ -133,7 +107,7 @@ def getProminentColor(searchTerm):
             px_max = px
             max_count = histogram[px]
 
-    return (((px_max[0], px_max[1], px_max[2])), imageUrl)
+    return (((px_max[0], px_max[1], px_max[2])), url)
 
 def loadColorData():
     global colors
@@ -150,10 +124,10 @@ def getColor(key):
         color = colors[key]["color"]
     else:
         (color, url) = getProminentColor(key)
-        colors[key] = {}
-        colors[key]["color"] = color
-        colors[key]["url"] = url
-        with open("imagecolors.json", "w+") as f:
-            f.write(json.dumps(colors))
+        if color and url:
+            colors[key] = {}
+            colors[key]["color"] = color
+            colors[key]["url"] = url
+            with open("imagecolors.json", "w+") as f:
+                f.write(json.dumps(colors))
     return color
-

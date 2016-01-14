@@ -47,6 +47,8 @@ import math
 import signal
 import random
 from optparse import OptionParser
+import bing
+import bingconfig
 
 gQuitting = False
 gCurrentColor = ()
@@ -106,10 +108,10 @@ def mqttOnMessage(mosq, obj, msg):
             try:
                 color = imagecolor.getColor(airline)
             except Exception as e:
-                log.error("getColor failed for '%s' : %s" % (msg.payload, e))
+                log.error("getColor failed  %s" % (e))
                 print traceback.format_exc()
                 return
-        if distance > options.max_distance:
+        if distance > options.max_distance or not color:
             color = (0, 0, 0)
         else:
             color_0 = int(color[0] * (1 - (distance / options.max_distance)))
@@ -169,14 +171,12 @@ def mqttConnect():
 
         #mqttc.on_log = mqttOnLog # Uncomment to enable debug messages
         mqttc.connect(options.mqtt_host, options.mqtt_port, 60)
-
         if 1:
             log.info("MQTT thread started")
             try:
                 mqttc.loop_start()
                 while True:
                     time.sleep(60)
-#                    mqttc.publish("paho/temperature", temperature)
                 log.info("MQTT thread exiting")
             except Exception as e:
                 log.error("MQTT thread got exception: %s" % (e))
@@ -191,6 +191,7 @@ def mqttConnect():
             thread.start()
         return True
     except socket.error, e:
+        log.error("Failed to connect MQTT broker at %s:%d" % (options.mqtt_host, options.mqtt_port))
         return False
 
     log.info("MQTT wierdness")
@@ -231,6 +232,11 @@ def main():
 
     (options, args) = parser.parse_args()
 
+    if bingconfig.key == None:
+        print "You really need to specify a Bing API key, see bingconfig.py"
+        sys.exit(1)
+    bing.setKey(bingconfig.key)
+
     signal.signal(signal.SIGINT, signal_handler)
 
     imagecolor.loadColorData()
@@ -242,6 +248,7 @@ def main():
         else:
             loggingInit(logging.INFO)
         log.info("Client started")
+
         mqttConnect()
     except Exception as e:
         log.error("Mainloop got exception: %s" % (e))
