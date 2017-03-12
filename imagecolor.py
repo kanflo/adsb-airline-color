@@ -1,4 +1,4 @@
-# Copyright (c) 2015 Johan Kanflo (github.com/kanflo)
+# Copyright (c) 2016 Johan Kanflo (github.com/kanflo)
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -26,15 +26,15 @@ import json
 import socket
 import logging
 import bing
+import sys
 
 log = logging.getLogger(__name__)
 
 try:
     from PIL import Image
 except ImportError:
-    print "PIL module not found, install using 'sudo pip install PIL'"
-    print "If that fails, try 'sudo pip install PIL --allow-external PIL --allow-unverified PIL'"
-    sys.exit(1)
+    print "Pillow module not found, install using 'sudo pip install Pillow'"
+    exit(1)
 
 
 def getImage(searchTerm):
@@ -112,7 +112,7 @@ def getProminentColor(searchTerm):
 def loadColorData():
     global colors
     try:
-        colors = json.load(open("imagecolors.json"))
+        colors = json.load(open("logocolors.json"))
     except:
         colors = {}
     return colors
@@ -128,6 +128,6 @@ def getColor(key):
             colors[key] = {}
             colors[key]["color"] = color
             colors[key]["url"] = url
-            with open("imagecolors.json", "w+") as f:
+            with open("logocolors.json", "w+") as f:
                 f.write(json.dumps(colors))
     return color
