@@ -26,7 +26,6 @@ import json
 import socket
 import logging
 import bing
-import sys
 
 log = logging.getLogger(__name__)
 
