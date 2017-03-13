@@ -1,4 +1,3 @@
-#!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
 
@@ -8,8 +7,6 @@ import socket
 
 """
 A module for centralized remote application logging
-
-See readme.md for a description of this file.
 """
 
 def init(logger, host = "localhost", port = 5005, level = logging.INFO, appName = None, subSystem = None):
