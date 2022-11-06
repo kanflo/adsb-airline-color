@@ -1,0 +1,27 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+
+        {
+            "name": "Airline Colors",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/airline-colors.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args" : ["-m", "172.16.3.104", "-d", "3", "-p", "/adsb/proximity/json", "-t", "ghost/color"],
+            "subProcess": true,
+            "justMyCode": false
+        },
+        {
+            "name": "Debug",
+            "type": "python",
+            "request": "launch",
+            "program": "${workspaceFolder}/airline-colors.py",
+            "cwd": "${workspaceFolder}",
+            "console": "integratedTerminal",
+            "args" : ["-m", "172.16.3.104", "-d", "3", "-p", "/adsb/proximity/json", "-t", "ghost/color", "-v"],
+            "subProcess": true
+        }
+    ]
+}

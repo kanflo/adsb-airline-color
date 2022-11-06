@@ -1,7 +1,7 @@
 #!/usr/bin/python
 # -*- coding: utf-8 -*-
 #
-# Copyright (c) 2016 Johan Kanflo (github.com/kanflo)
+# Copyright (c) 2022 Johan Kanflo (github.com/kanflo)
 #
 # Permission is hereby granted, free of charge, to any person obtaining
 # a copy of this software and associated documentation files (the
@@ -27,64 +27,32 @@
 # topic 'ghost/led' according to operator/distance of an aircraft.
 #
 
-import imagecolor
-import os
-import paho.mqtt.client as mosquitto
-import Queue
-import time
-from threading import *
-import remotelogger
-import logging, sys
-import socket
-import calendar, datetime
+from typing import *
+import sys
 import json
-import traceback
-import math
-import signal
-import random
 import argparse
-import bing
-import bingconfig
-
-gQuitting = False
-gCurrentColor = ()
-
-gConnectCount = 0
-
-log = logging.getLogger(__name__)
+import logging
+try:
+    import mqttwrapper
+except ImportError:
+    print("sudo -H python -m pip install git+https://github.com/kanflo/mqttwrapper")
+    sys.exit(1)
+import imagecolor
 
 
-def mqttOnConnect(mosq, obj, rc):
-    log.info("MQTT connected")
-    mosq.subscribe("adsb/proximity/json", 0)
-    log.debug("MQTT Connect: %s" % (str(rc)))
+current_color = ()
 
-def mqttOnDisconnect(mosq, obj, rc):
-    if 1:
-        log.info("MQTT disconnected")
-    else:
-        global gQuitting
-        global gConnectCount
-        log.info("MQTT Disconnect: %s" % (str(rc)))
-        gConnectCount += 1
-        if gConnectCount == 10:
-            log.info("Giving up!")
-            gQuitting = True
-            sys.exit()
-        if not gQuitting:
-            while not mqttConnect():
-                time.sleep(10)
-                log.info("Attempting MQTT reconnect")
-        log.info("MQTT connected")
 
-def mqttOnMessage(mosq, obj, msg):
-    global args
-    global gCurrentColor
+def mqtt_callback(topic: str, payload: str) -> Optional[list[tuple]]:
+    logging.debug("Got %s : %s" % (topic, payload))
+    global current_color
     try:
-        data = json.loads(msg.payload)
+        payload = payload.decode("utf-8")
+        payload = payload.replace("\r", "")
+        payload = payload.replace("\n", "")
+        data = json.loads(payload)
     except Exception as e:
-        log.error("JSON load failed for '%s' : %s" % (msg.payload, e))
-        print traceback.format_exc()
+        logging.error("JSON load failed for '%s'" % (payload), exc_info=True)
         return
 
     if data["operator"] and data["distance"]:
@@ -98,124 +66,28 @@ def mqttOnMessage(mosq, obj, msg):
             airline = "SAS Airlines"
 
         if lost:
-            log.debug("Lost sight of aircraft")
+            logging.debug("Lost sight of aircraft")
             color = (0, 0, 0)
         else:
             try:
-                color = imagecolor.getColor(airline)
+                color = imagecolor.get_color(airline)
+                logging.debug("#%02x%02x%02x : %s" % (color[0], color[1], color[2], airline))
             except Exception as e:
-                log.error("getColor failed  %s" % (e))
-                print traceback.format_exc()
+                logging.error("get_color failed", exc_info = True)
                 return
-        if distance > args.max_distance or not color:
+        if not color or distance > args.max_distance:
             color = (0, 0, 0)
         else:
             color_0 = int(color[0] * (1 - (distance / args.max_distance)))
             color_1 = int(color[1] * (1 - (distance / args.max_distance)))
             color_2 = int(color[2] * (1 - (distance / args.max_distance)))
             color = (color_0, color_1, color_2)
-        if color != gCurrentColor:
-            log.debug("New color is %02x%02x%02x" % (color[0], color[1], color[2]))
-            # This is a bit lazy, I know...
-            cmd = "mosquitto_pub -h %s -t %s -m \"#%02x%02x%02x\"" % (args.mqtt_host, args.mqtt_topic, color[0], color[1], color[2])
-            os.system(cmd)
-            gCurrentColor = color
+        if color != current_color:
+            logging.info("New color is %02x%02x%02x for %s" % (color[0], color[1], color[2], airline))
+            current_color = color
+            resp = (args.color_topic, "#%02x%02x%02x" % (color[0], color[1], color[2]))
+            return [resp]
 
-
-def mqttOnPublish(mosq, obj, mid):
-# log.debug("mid: "+str(mid)))
-    pass
-
-
-def mqttOnSubscribe(mosq, obj, mid, granted_qos):
-    log.debug("Subscribed")
-
-
-def mqttOnLog(mosq, obj, level, string):
-    log.debug("log:"+string)
-
-
-def mqttThread():
-    global gQuitting
-    log.info("MQTT thread started")
-    try:
-        mqttc.loop_forever()
-        gQuitting = True
-        log.info("MQTT thread exiting")
-        gQuitting = True
-    except Exception as e:
-        log.error("MQTT thread got exception: %s" % (e))
-        print traceback.format_exc()
-#        gQuitting = True
-#        log.info("MQTT disconnect")
-#        mqttc.disconnect();
-    log.info("MQTT thread exited")
-
-def mqttConnect():
-    global mqttc
-    global args
-    try:
-        # If you want to use a specific client id, use
-        # mqttc = mosquitto.Mosquitto("client-id")
-        # but note that the client id must be unique on the broker. Leaving the client
-        # id parameter empty will generate a random id for you.
-        mqttc = mosquitto.Mosquitto("airlinecolor-%d" % (random.randint(0, 65535)))
-        mqttc.on_message = mqttOnMessage
-        mqttc.on_connect = mqttOnConnect
-        mqttc.on_disconnect = mqttOnDisconnect
-        mqttc.on_publish = mqttOnPublish
-        mqttc.on_subscribe = mqttOnSubscribe
-
-        #mqttc.on_log = mqttOnLog # Uncomment to enable debug messages
-        mqttc.connect(args.mqtt_host, args.mqtt_port, 60)
-        if 1:
-            log.info("MQTT thread started")
-            try:
-                mqttc.loop_start()
-                while True:
-                    time.sleep(60)
-                log.info("MQTT thread exiting")
-            except Exception as e:
-                log.error("MQTT thread got exception: %s" % (e))
-                print traceback.format_exc()
-        #        gQuitting = True
-        #        log.info("MQTT disconnect")
-        #        mqttc.disconnect();
-            log.info("MQTT thread exited")
-        else:
-            thread = Thread(target = mqttThread)
-            thread.daemon = True
-            thread.start()
-        return True
-    except socket.error, e:
-        log.error("Failed to connect MQTT broker at %s:%d" % (args.mqtt_host, args.mqtt_port))
-        return False
-
-    log.info("MQTT wierdness")
-
-
-def loggingInit(level, log_host):
-    log = logging.getLogger(__name__)
-
-    # Initialize remote logging
-    logger = logging.getLogger()
-    logger.setLevel(level)
-    if log_host != None:
-        remotelogger.init(logger = logger, appName = "airlinecol", subSystem = None, host = log_host, level = logging.DEBUG)
-
-    # Log to stdout
-    ch = logging.StreamHandler(sys.stdout)
-    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch.setFormatter(formatter)
-    logger.addHandler(ch)
-
-def signal_handler(signal, frame):
-    global gQuitting
-    global mqttc
-    print "ctrl-c"
-    gQuitting = True
-    mqttc.disconnect();
-    sys.exit(0)
 
 def main():
     global gQuitting
@@ -223,38 +95,26 @@ def main():
     global args
     parser = argparse.ArgumentParser()
     parser.add_argument('-m', '--mqtt-host', dest='mqtt_host', help="MQTT broker hostname", default='127.0.0.1')
-    parser.add_argument('-p', '--mqtt-port', dest='mqtt_port', type=int, help="MQTT broker port number", default=1883)
-    parser.add_argument('-t', '--mqtt-topic', dest='mqtt_topic', help="MQTT color topic", default="airlinecolor")
+    parser.add_argument('-p', '--prox-topic', dest='prox_topic', help="ADSB MQTT proximity topic", default="/adsb/proximity/json")
+    parser.add_argument('-t', '--color-topic', dest='color_topic', help="MQTT color topic", default="ghost/color")
     parser.add_argument('-d', '--max-distance', dest='max_distance', type=float, help="Max distance to light the LED (km)", default=10.0)
     parser.add_argument('-v', '--verbose', dest='verbose', action="store_true", help="Verbose output")
     parser.add_argument('-l', '--logger', dest='log_host', help="Remote log host")
 
     args = parser.parse_args()
 
-    if bingconfig.key == None:
-        print "You really need to specify a Bing API key, see bingconfig.py"
-        sys.exit(1)
-    bing.setKey(bingconfig.key)
-
-    signal.signal(signal.SIGINT, signal_handler)
-
-    imagecolor.loadColorData()
+    level = logging.DEBUG if args.verbose else logging.INFO
+    logging.basicConfig(level=level, stream=sys.stdout,
+                        format='%(asctime)s %(levelname)s %(funcName)s(%(lineno)d) %(message)s',
+                        datefmt='%Y%m%d %H:%M:%S')
+    logging.info("---[ Starting %s ]---------------------------------------------" % sys.argv[0])
+    imagecolor.load_color_data()
 
     try:
-        signal.signal(signal.SIGINT, signal_handler)
-        if args.verbose:
-            loggingInit(logging.DEBUG, args.log_host)
-        else:
-            loggingInit(logging.INFO, args.log_host)
-        log.info("Client started")
-
-        mqttConnect()
+        mqttwrapper.run_script(mqtt_callback, broker="mqtt://nano.local", topics=[args.prox_topic])
     except Exception as e:
-        log.error("Mainloop got exception: %s" % (e))
-        print traceback.format_exc()
-        gQuitting = True
-    log.debug("MQTT disconnect")
-    mqttc.disconnect();
+        logging.error("Caught exception", exc_info = True)
+
 
 # Ye ol main
 if __name__ == "__main__":
