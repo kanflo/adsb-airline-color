@@ -192,20 +192,21 @@ def get_prominent_color(im: PngImageFile) -> tuple:
         tuple: (r, g, b) of most prominent color or (0, 0, 0) in case of errors
     """
     histogram = {}
-    limit = 10
+    limit = 10  # Ignore "dark" pixels
 
     try:
         for i in range(im.size[0]):
             for j in range(im.size[1]):
                 px = im.getpixel((i,j))
                 if px != (0, 0, 0) and px != (0, 0, 0, 0) and px != (255, 255, 255):
-                    if abs(px[0]-px[1]) > limit or abs(px[0]-px[2]) > limit or abs(px[1]-px[2]) > limit:
+                    if px[0] > limit or px[1] > limit or px[2] > limit:
                         if not px in histogram:
                             histogram[px] = 1
                         else:
                             histogram[px] += 1
     except AttributeError as e:
-        pass # Grayscale image?
+        logging.error("Image analysis caused exception", exc_info = True)
+        return (0, 0, 0)
 
     px_max = (0, 0, 0)
     max_count = 0
@@ -249,13 +250,14 @@ def get_color(airline: str) -> tuple:
     else:
         url = search_image(airline + " logo")
         if url:
+            logging.info("Downloading " + url)
             image = download_image(url)
-            logging.info(url)
             color = get_prominent_color(image)
             if color:
                 colors[key] = {}
                 colors[key]["color"] = color
                 colors[key]["url"] = url
+                logging.info("Added #%02x%02x%02x for %s" % (color[0], color[1], color[2], airline))
                 with open("logocolors.json", "w+") as f:
                     f.write(json.dumps(colors))
     return color
